@@ -14,6 +14,8 @@ NEW FEATURES:
 
   ZOOKEEPER-1962: Add a CLI command to recursively list a znode and
   children (Gautam Gopalakrishnan, Hongchao Deng, Enis Soztutar via phunt)
+  
+  ZOOKEEPER-2169: Enable creation of nodes with TTLs (Jordan Zimmerman via camille)
 
 BUGFIXES:
   ZOOKEEPER-1784 wrong check for COMMITANDACTIVATE in observer code, Learner.java (rgs via shralex).
@@ -391,6 +393,9 @@ BUGFIXES:
 
   ZOOKEEPER-2579: ZooKeeper server should verify that dataDir and
   snapDir are writeable before starting (Abraham Fine via phunt)
+
+  ZOOKEEPER-2611: zoo_remove_watchers - can remove the wrong watch
+  (Eyal Leshmem via rgs)
 
 IMPROVEMENTS:
   ZOOKEEPER-2024 Major throughput improvement with mixed workloads (Kfir Lev-Ari via shralex)
