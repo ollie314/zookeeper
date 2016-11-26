@@ -112,7 +112,7 @@ public class NIOServerCnxn extends ServerCnxn {
         sock.socket().setSoLinger(false, -1);
         InetAddress addr = ((InetSocketAddress) sock.socket()
                 .getRemoteSocketAddress()).getAddress();
-        authInfo.add(new Id("ip", addr.getHostAddress()));
+        addAuthInfo(new Id("ip", addr.getHostAddress()));
         this.sessionTimeout = factory.sessionlessCnxnTimeout;
     }
 
@@ -478,7 +478,7 @@ public class NIOServerCnxn extends ServerCnxn {
     {
         // We take advantage of the limited size of the length to look
         // for cmds. They are all 4-bytes which fits inside of an int
-        String cmd = FourLetterCommands.cmd2String.get(len);
+        String cmd = FourLetterCommands.getCmdMapView().get(len);
         if (cmd == null) {
             return false;
         }

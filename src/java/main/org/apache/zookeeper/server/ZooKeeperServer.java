@@ -63,6 +63,7 @@ import org.apache.zookeeper.server.SessionTracker.Session;
 import org.apache.zookeeper.server.SessionTracker.SessionExpirer;
 import org.apache.zookeeper.server.auth.AuthenticationProvider;
 import org.apache.zookeeper.server.auth.ProviderRegistry;
+import org.apache.zookeeper.server.auth.ServerAuthenticationProvider;
 import org.apache.zookeeper.server.persistence.FileTxnSnapLog;
 import org.apache.zookeeper.server.quorum.ReadOnlyZooKeeperServer;
 import org.apache.zookeeper.txn.CreateSessionTxn;
@@ -332,8 +333,11 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
     private long getDirSize(File file) {
         long size = 0L;
         if (file.isDirectory()) {
-            for (File f: file.listFiles()) {
-                size += getDirSize(f);
+            File[] files = file.listFiles();
+            if (files != null) {
+                for (File f : files) {
+                    size += getDirSize(f);
+                }
             }
         } else {
             size = file.length();
@@ -1034,11 +1038,11 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
             AuthPacket authPacket = new AuthPacket();
             ByteBufferInputStream.byteBuffer2Record(incomingBuffer, authPacket);
             String scheme = authPacket.getScheme();
-            AuthenticationProvider ap = ProviderRegistry.getProvider(scheme);
+            ServerAuthenticationProvider ap = ProviderRegistry.getServerProvider(scheme);
             Code authReturn = KeeperException.Code.AUTHFAILED;
             if(ap != null) {
                 try {
-                    authReturn = ap.handleAuthentication(cnxn, authPacket.getAuth());
+                    authReturn = ap.handleAuthentication(new ServerAuthenticationProvider.ServerObjs(this, cnxn), authPacket.getAuth());
                 } catch(RuntimeException e) {
                     LOG.warn("Caught runtime exception from AuthenticationProvider: " + scheme + " due to " + e);
                     authReturn = KeeperException.Code.AUTHFAILED;
