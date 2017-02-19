@@ -194,6 +194,7 @@ struct _zhandle {
     // Hostlist and list of addresses
     char *hostname;                     // hostname contains list of zookeeper servers to connect to
     struct sockaddr_storage addr_cur;   // address of server we're currently connecting/connected to 
+    struct sockaddr_storage addr_rw_server; // address of last known read/write server found.
 
     addrvec_t addrs;                    // current list of addresses we're connected to
     addrvec_t addrs_old;                // old list of addresses that we are no longer connected to
@@ -273,10 +274,12 @@ struct _zhandle {
 int adaptor_init(zhandle_t *zh);
 void adaptor_finish(zhandle_t *zh);
 void adaptor_destroy(zhandle_t *zh);
+#if THREADED
 struct sync_completion *alloc_sync_completion(void);
 int wait_sync_completion(struct sync_completion *sc);
 void free_sync_completion(struct sync_completion *sc);
 void notify_sync_completion(struct sync_completion *sc);
+#endif
 int adaptor_send_queue(zhandle_t *zh, int timeout);
 int process_async(int outstanding_sync);
 void process_completions(zhandle_t *zh);
