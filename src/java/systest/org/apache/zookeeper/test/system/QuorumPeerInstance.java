@@ -26,6 +26,7 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 
 import org.slf4j.Logger;
@@ -55,7 +56,7 @@ class QuorumPeerInstance implements Instance {
     InetSocketAddress clientAddr;
     InetSocketAddress quorumLeaderAddr;
     InetSocketAddress quorumLeaderElectionAddr;
-    HashMap<Long, QuorumServer> peers;
+    Map<Long, QuorumServer> peers;
     File snapDir, logDir;
 
     public QuorumPeerInstance() {
@@ -190,7 +191,7 @@ class QuorumPeerInstance implements Instance {
                     return;
                 }
                 System.err.println("SnapDir = " + snapDir + " LogDir = " + logDir);
-                peer = new QuorumPeer(peers, snapDir, logDir, clientAddr.getPort(), 0, serverId, tickTime, initLimit, syncLimit);
+                peer = new QuorumPeer(peers, snapDir, logDir, clientAddr.getPort(), 3, serverId, tickTime, initLimit, syncLimit);
                 peer.start();
                 for(int i = 0; i < 5; i++) {
                     Thread.sleep(500);

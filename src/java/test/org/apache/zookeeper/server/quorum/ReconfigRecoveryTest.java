@@ -22,15 +22,22 @@ import static org.apache.zookeeper.test.ClientBase.CONNECTION_TIMEOUT;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Set;
 
 import org.apache.zookeeper.PortAssignment;
 import org.apache.zookeeper.ZooKeeper;
 import org.apache.zookeeper.test.ClientBase;
 import org.apache.zookeeper.test.ReconfigTest;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 
 public class ReconfigRecoveryTest extends QuorumPeerTestBase {
+    @Before
+    public void setup() {
+        QuorumPeerConfig.setReconfigEnabled(true);
+    }
+
     /**
      * Reconfiguration recovery - test that a reconfiguration is completed if
      * leader has .next file during startup and new config is not running yet
@@ -393,7 +400,7 @@ public class ReconfigRecoveryTest extends QuorumPeerTestBase {
         String currentQuorumCfgSection, nextQuorumCfgSection;
 
         // generate old config string
-        HashSet<Integer> observers = new HashSet<Integer>();
+        Set<Integer> observers = new HashSet<Integer>();
         observers.add(2);
         StringBuilder sb = generateConfig(3, ports, observers);
         currentQuorumCfgSection = sb.toString();
@@ -467,7 +474,7 @@ public class ReconfigRecoveryTest extends QuorumPeerTestBase {
         String currentQuorumCfg, nextQuorumCfgSection;
 
         // generate old config string
-        HashSet<Integer> observers = new HashSet<Integer>();
+        Set<Integer> observers = new HashSet<Integer>();
         observers.add(2);
 
         StringBuilder sb = generateConfig(3, ports, observers);
@@ -564,7 +571,7 @@ public class ReconfigRecoveryTest extends QuorumPeerTestBase {
      * observerIds correspond to observers, other ids are for participants.
      */
     public static StringBuilder generateConfig(int numServers, int[][] ports,
-            HashSet<Integer> observerIds) {
+            Set<Integer> observerIds) {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < numServers; i++) {
             String server = "server." + i + "=localhost:" + ports[i][0] + ":"

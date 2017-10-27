@@ -26,6 +26,7 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.UnresolvedAddressException;
@@ -74,11 +75,6 @@ public class QuorumCnxManager {
     static final int SEND_CAPACITY = 1;
 
     static final int PACKETMAXSIZE = 1024 * 512;
-    /*
-     * Maximum number of attempts to connect to a peer
-     */
-
-    static final int MAX_CONNECTION_ATTEMPTS = 2;
     
     /*
      * Negative counter for observer server ids.
@@ -138,6 +134,12 @@ public class QuorumCnxManager {
      * Counter to count worker threads
      */
     private AtomicInteger threadCnt = new AtomicInteger(0);
+
+    /*
+     * Socket options for TCP keepalive
+     */
+    private final boolean tcpKeepAlive = Boolean.getBoolean("zookeeper.tcpKeepAlive");
+
 
     static public class Message {
         Message(ByteBuffer buffer, long sid) {
@@ -565,6 +567,7 @@ public class QuorumCnxManager {
      */
     private void setSockOpts(Socket sock) throws SocketException {
         sock.setTcpNoDelay(true);
+        sock.setKeepAlive(tcpKeepAlive);
         sock.setSoTimeout(self.tickTime * self.syncLimit);
     }
 
@@ -637,12 +640,18 @@ public class QuorumCnxManager {
                     setName(addr.toString());
                     ss.bind(addr);
                     while (!shutdown) {
-                        client = ss.accept();
-                        setSockOpts(client);
-                        LOG.info("Received connection request "
-                                + client.getRemoteSocketAddress());
-                        receiveConnection(client);
-                        numRetries = 0;
+                        try {
+                            client = ss.accept();
+                            setSockOpts(client);
+                            LOG.info("Received connection request "
+                                     + client.getRemoteSocketAddress());
+                            receiveConnection(client);
+                            numRetries = 0;
+                        } catch (SocketTimeoutException e) {
+                            LOG.warn("The socket is listening for the election accepted "
+                                     + "and it timed out unexpectedly, but will retry."
+                                     + "see ZOOKEEPER-2836");
+                        }
                     }
                 } catch (IOException e) {
                     if (shutdown) {

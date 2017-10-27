@@ -855,6 +855,10 @@ zk.getConfig(watcher, callback, context);</pre>
         
 </div>
 </div>
+<p>If the configuration of existing servers changes or they become unavailable
+          before the joiner succeeds to connect and learn obout configuration changes, the
+          joiner may need to be restarted with an updated configuration file in order to be
+          able to connect.</p>
 <p>Finally, note that once connected to the leader, a joiner adopts
           the last committed configuration, in which it is absent (the initial
           config of the joiner is backed up before being rewritten). If the
@@ -1007,7 +1011,7 @@ System.out.println(configStr);</pre>
           example, you may specify a Hierarchical Quorum System even if the
           current ensemble uses a Majority Quorum System.</p>
 <p>Bulk mode - example using the Java API:</p>
-<pre class="code">ArrayList&lt;String&gt; newMembers = new ArrayList&lt;String&gt;();
+<pre class="code">List&lt;String&gt; newMembers = new ArrayList&lt;String&gt;();
 newMembers.add("server.1=1111:1234:1235;1236");
 newMembers.add("server.2=1112:1237:1238;1239");
 newMembers.add("server.3=1114:1240:1241:observer;1242");
@@ -1232,7 +1236,7 @@ document.write("Last Published: " + document.lastModified);
 </div>
 <div class="copyright">
         Copyright &copy;
-         2008-2013 <a href="http://www.apache.org/licenses/">The Apache Software Foundation.</a>
+          <a href="http://www.apache.org/licenses/">The Apache Software Foundation.</a>
 </div>
 <!--+
     |end bottomstrip

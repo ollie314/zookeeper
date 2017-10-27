@@ -130,8 +130,10 @@ public abstract class ServerCnxnFactory {
             serverCnxnFactoryName = NIOServerCnxnFactory.class.getName();
         }
         try {
-            return (ServerCnxnFactory) Class.forName(serverCnxnFactoryName)
-                                                .newInstance();
+            ServerCnxnFactory serverCnxnFactory = (ServerCnxnFactory) Class.forName(serverCnxnFactoryName)
+                    .getDeclaredConstructor().newInstance();
+            LOG.info("Using {} as server connection factory", serverCnxnFactoryName);
+            return serverCnxnFactory;
         } catch (Exception e) {
             IOException ioe = new IOException("Couldn't instantiate "
                     + serverCnxnFactoryName);

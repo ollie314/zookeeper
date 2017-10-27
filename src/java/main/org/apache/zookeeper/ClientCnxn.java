@@ -693,10 +693,8 @@ public class ClientCnxn {
                     }
                 }
             } catch (KeeperException.NoWatcherException nwe) {
-                LOG.error("Failed to find watcher!", nwe);
                 p.replyHeader.setErr(nwe.code().intValue());
             } catch (KeeperException ke) {
-                LOG.error("Exception when removing watcher", ke);
                 p.replyHeader.setErr(ke.code().intValue());
             }
         }
@@ -1054,6 +1052,8 @@ public class ClientCnxn {
         private boolean saslLoginFailed = false;
 
         private void startConnect() throws IOException {
+            // initializing it for new connection
+            saslLoginFailed = false;
             if(!isFirstConnect){
                 try {
                     Thread.sleep(r.nextInt(1000));

@@ -19,6 +19,7 @@
 package org.apache.zookeeper;
 
 import org.apache.jute.Record;
+import org.apache.yetus.audience.InterfaceAudience;
 import org.apache.zookeeper.AsyncCallback.ACLCallback;
 import org.apache.zookeeper.AsyncCallback.Children2Callback;
 import org.apache.zookeeper.AsyncCallback.ChildrenCallback;
@@ -122,11 +123,11 @@ import java.util.Set;
  * A client needs an object of a class implementing Watcher interface for
  * processing the events delivered to the client.
  *
- * When a client drops current connection and re-connects to a server, all the
+ * When a client drops the current connection and re-connects to a server, all the
  * existing watches are considered as being triggered but the undelivered events
  * are lost. To emulate this, the client will generate a special event to tell
- * the event handler a connection has been dropped. This special event has type
- * EventNone and state sKeeperStateDisconnected.
+ * the event handler a connection has been dropped. This special event has
+ * EventType None and KeeperState Disconnected.
  *
  */
 /*
@@ -137,6 +138,7 @@ import java.util.Set;
  * signature for backwards compatibility purposes.
 */
 @SuppressWarnings("try")
+@InterfaceAudience.Public
 public class ZooKeeper implements AutoCloseable {
 
     /**
@@ -616,6 +618,7 @@ public class ZooKeeper implements AutoCloseable {
         }
     }
 
+    @InterfaceAudience.Public
     public enum States {
         CONNECTING, ASSOCIATING, CONNECTED, CONNECTEDREADONLY,
         CLOSED, AUTH_FAILED, NOT_CONNECTED;
@@ -1298,6 +1301,11 @@ public class ZooKeeper implements AutoCloseable {
      * <p>
      * Added in 3.5.3: <a href="https://docs.oracle.com/javase/tutorial/essential/exceptions/tryResourceClose.html">try-with-resources</a>
      * may be used instead of calling close directly.
+     * </p>
+     * <p>
+     * This method does not wait for all internal threads to exit.
+     * Use the {@link #close(int) } method to wait for all resources to be released
+     * </p>
      *
      * @throws InterruptedException
      */
@@ -1322,6 +1330,22 @@ public class ZooKeeper implements AutoCloseable {
         }
 
         LOG.info("Session: 0x" + Long.toHexString(getSessionId()) + " closed");
+    }
+
+    /**
+     * Close this client object as the {@link #close() } method.
+     * This method will wait for internal resources to be released.
+     *
+     * @param waitForShutdownTimeoutMs timeout (in milliseconds) to wait for resources to be released.
+     * Use zero or a negative value to skip the wait
+     * @throws InterruptedException
+     * @return true if waitForShutdownTimeout is greater than zero and all of the resources have been released
+     *
+     * @since 3.5.4
+     */
+    public boolean close(int waitForShutdownTimeoutMs) throws InterruptedException {
+        close();
+        return testableWaitForShutdown(waitForShutdownTimeoutMs);
     }
 
     /**
@@ -1405,6 +1429,7 @@ public class ZooKeeper implements AutoCloseable {
         final String clientPath = path;
         PathUtils.validatePath(clientPath, createMode.isSequential());
         EphemeralType.validateTTL(createMode, -1);
+        validateACL(acl);
 
         final String serverPath = prependChroot(clientPath);
 
@@ -1415,9 +1440,6 @@ public class ZooKeeper implements AutoCloseable {
         request.setData(data);
         request.setFlags(createMode.toFlag());
         request.setPath(serverPath);
-        if (acl != null && acl.size() == 0) {
-            throw new KeeperException.InvalidACLException();
-        }
         request.setAcl(acl);
         ReplyHeader r = cnxn.submitRequest(h, request, response, null);
         if (r.getErr() != 0) {
@@ -1508,15 +1530,13 @@ public class ZooKeeper implements AutoCloseable {
         final String clientPath = path;
         PathUtils.validatePath(clientPath, createMode.isSequential());
         EphemeralType.validateTTL(createMode, ttl);
+        validateACL(acl);
 
         final String serverPath = prependChroot(clientPath);
 
         RequestHeader h = new RequestHeader();
         setCreateHeader(createMode, h);
         Create2Response response = new Create2Response();
-        if (acl != null && acl.size() == 0) {
-            throw new KeeperException.InvalidACLException();
-        }
         Record record = makeCreateRecord(createMode, serverPath, data, acl, ttl);
         ReplyHeader r = cnxn.submitRequest(h, record, response, null);
         if (r.getErr() != 0) {
@@ -2326,29 +2346,30 @@ public class ZooKeeper implements AutoCloseable {
 
     /**
      * Set the ACL for the node of the given path if such a node exists and the
-     * given version matches the version of the node. Return the stat of the
+     * given aclVersion matches the acl version of the node. Return the stat of the
      * node.
      * <p>
      * A KeeperException with error code KeeperException.NoNode will be thrown
      * if no node with the given path exists.
      * <p>
      * A KeeperException with error code KeeperException.BadVersion will be
-     * thrown if the given version does not match the node's version.
+     * thrown if the given aclVersion does not match the node's aclVersion.
      *
-     * @param path
-     * @param acl
-     * @param version
+     * @param path the given path for the node
+     * @param acl the given acl for the node
+     * @param aclVersion the given acl version of the node
      * @return the stat of the node.
      * @throws InterruptedException If the server transaction is interrupted.
      * @throws KeeperException If the server signals an error with a non-zero error code.
      * @throws org.apache.zookeeper.KeeperException.InvalidACLException If the acl is invalide.
      * @throws IllegalArgumentException if an invalid path is specified
      */
-    public Stat setACL(final String path, List<ACL> acl, int version)
+    public Stat setACL(final String path, List<ACL> acl, int aclVersion)
         throws KeeperException, InterruptedException
     {
         final String clientPath = path;
         PathUtils.validatePath(clientPath);
+        validateACL(acl);
 
         final String serverPath = prependChroot(clientPath);
 
@@ -2356,11 +2377,8 @@ public class ZooKeeper implements AutoCloseable {
         h.setType(ZooDefs.OpCode.setACL);
         SetACLRequest request = new SetACLRequest();
         request.setPath(serverPath);
-        if (acl != null && acl.size() == 0) {
-            throw new KeeperException.InvalidACLException(clientPath);
-        }
         request.setAcl(acl);
-        request.setVersion(version);
+        request.setVersion(aclVersion);
         SetACLResponse response = new SetACLResponse();
         ReplyHeader r = cnxn.submitRequest(h, request, response, null);
         if (r.getErr() != 0) {
@@ -2919,6 +2937,20 @@ public class ZooKeeper implements AutoCloseable {
                     + clientCnxnSocketName);
             ioe.initCause(e);
             throw ioe;
+        }
+    }
+
+    /**
+     * Validates the provided ACL list for null, empty or null value in it.
+     * 
+     * @param acl
+     *            ACL list
+     * @throws InvalidACLException
+     *             if ACL list is not valid
+     */
+    private void validateACL(List<ACL> acl) throws KeeperException.InvalidACLException {
+        if (acl == null || acl.isEmpty() || acl.contains(null)) {
+            throw new KeeperException.InvalidACLException();
         }
     }
 }

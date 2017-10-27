@@ -409,7 +409,7 @@ server.3=zoo3:2888:3888</programlisting>
     <section id="sc_designing">
       <title>Designing a ZooKeeper Deployment</title>
 
-      <para>The reliablity of ZooKeeper rests on two basic assumptions.</para>
+      <para>The reliability of ZooKeeper rests on two basic assumptions.</para>
       <orderedlist>
         <listitem><para> Only a minority of servers in a deployment
             will fail. <emphasis>Failure</emphasis> in this context
@@ -524,7 +524,7 @@ server.3=zoo3:2888:3888</programlisting>
           made to the znodes these changes are appended to a
           transaction log, occasionally, when a log grows large, a
           snapshot of the current state of all znodes will be written
-          to the filesystem. This snapshot supercedes all previous
+          to the filesystem. This snapshot supersedes all previous
           logs.
         </para>
 
@@ -769,11 +769,11 @@ server.3=zoo3:2888:3888</programlisting>
               role="bold">dataLogDir</emphasis> rather than the <emphasis
               role="bold">dataDir</emphasis>. This allows a dedicated log
               device to be used, and helps avoid competition between logging
-              and snaphots.</para>
+              and snapshots.</para>
 
               <note>
                 <para>Having a dedicated log device has a large impact on
-                throughput and stable latencies. It is highly recommened to
+                throughput and stable latencies. It is highly recommended to
                 dedicate a log device and set <emphasis
                 role="bold">dataLogDir</emphasis> to point to a directory on
                 that device, and then make sure to point <emphasis
@@ -822,11 +822,15 @@ server.3=zoo3:2888:3888</programlisting>
               <para>(Java system property: <emphasis
               role="bold">zookeeper.snapCount</emphasis>)</para>
 
-              <para>ZooKeeper logs transactions to a transaction
-              log. After snapCount transactions are written to a log
-              file a snapshot is started and a new transaction log
-              file is created. The default snapCount is
-              100,000.</para>
+              <para>ZooKeeper records its transactions using snapshots and
+              a transaction log (think write-ahead log).The number of
+              transactions recorded in the transaction log before a snapshot
+              can be taken (and the transaction log rolled) is determined
+              by snapCount. In order to prevent all of the machines in the quorum
+              from taking a snapshot at the same time, each ZooKeeper server
+              will take a snapshot when the number of transactions in the transaction log
+              reaches a runtime generated random value in the [snapCount/2+1, snapCount] 
+              range.The default snapCount is 100,000.</para>
             </listitem>
           </varlistentry>
 
@@ -958,15 +962,14 @@ server.3=zoo3:2888:3888</programlisting>
             <listitem>
               <para>(No Java system property)</para>
 
-              <para>Election implementation to use. A value of "0" corresponds
-              to the original UDP-based version, "1" corresponds to the
+              <para>Election implementation to use. A value of "1" corresponds to the
               non-authenticated UDP-based version of fast leader election, "2"
               corresponds to the authenticated UDP-based version of fast
               leader election, and "3" corresponds to TCP-based version of
-              fast leader election. Currently, algorithm 3 is the default</para>
+              fast leader election. Currently, algorithm 3 is the default.</para>
               
               <note>
-              <para> The implementations of leader election 0, 1, and 2 are now 
+              <para> The implementations of leader election 1, and 2 are now
               <emphasis role="bold"> deprecated </emphasis>. We have the intention
               of removing them in the next release, at which point only the 
               FastLeaderElection will be available. 
@@ -997,7 +1000,7 @@ server.3=zoo3:2888:3888</programlisting>
 
               <para>Leader accepts client connections. Default value is "yes".
               The leader machine coordinates updates. For higher update
-              throughput at thes slight expense of read throughput the leader
+              throughput at the slight expense of read throughput the leader
               can be configured to not accept clients and focus on
               coordination. The default to this option is yes, which means
               that a leader will accept client connections.</para>
@@ -1029,9 +1032,7 @@ server.3=zoo3:2888:3888</programlisting>
 
               <para>There are two port numbers <emphasis role="bold">nnnnn</emphasis>. 
               The first followers use to connect to the leader, and the second is for 
-              leader election. The leader election port is only necessary if electionAlg 
-              is 1, 2, or 3 (default). If electionAlg is 0, then the second port is not 
-              necessary. If you want to test multiple servers on a single machine, then 
+              leader election. If you want to test multiple servers on a single machine, then
               different ports can be used for each server.</para>
             </listitem>
           </varlistentry>
@@ -1155,6 +1156,63 @@ server.3=zoo3:2888:3888</programlisting>
             </listitem>
           </varlistentry>
 
+          <varlistentry>
+            <term>4lw.commands.whitelist</term>
+
+            <listitem>
+              <para>(Java system property: <emphasis
+                      role="bold">zookeeper.4lw.commands.whitelist</emphasis>)</para>
+
+              <para><emphasis role="bold">New in 3.5.3:</emphasis>
+                A list of comma separated <ulink url="#sc_4lw">Four Letter Words</ulink>
+                commands that user wants to use. A valid Four Letter Words
+                command must be put in this list else ZooKeeper server will
+                not enable the command.
+                By default the whitelist only contains "srvr" command
+                which zkServer.sh uses. The rest of four letter word commands are disabled
+                by default.
+              </para>
+
+              <para>Here's an example of the configuration that enables stat, ruok, conf, and isro
+              command while disabling the rest of Four Letter Words command:</para>
+              <programlisting>
+                4lw.commands.whitelist=stat, ruok, conf, isro
+              </programlisting>
+
+              <para>If you really need enable all four letter word commands by default, you can use
+                the asterisk option so you don't have to include every command one by one in the list.
+                As an example, this will enable all four letter word commands:
+              </para>
+              <programlisting>
+                4lw.commands.whitelist=*
+              </programlisting>
+
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term>tcpKeepAlive</term>
+
+            <listitem>
+              <para>(Java system property: <emphasis
+                      role="bold">zookeeper.tcpKeepAlive</emphasis>)</para>
+
+              <para><emphasis role="bold">New in 3.5.4:</emphasis>
+                Setting this to true sets the TCP keepAlive flag on the
+                sockets used by quorum members to perform elections.
+                This will allow for connections between quorum members to
+                remain up when there is network infrastructure that may
+                otherwise break them. Some NATs and firewalls may terminate
+                or lose state for long running or idle connections.</para>
+
+              <para> Enabling this option relies on OS level settings to work
+                properly, check your operating system's options regarding TCP
+                keepalive for more information.  Defaults to
+                <emphasis role="bold">false</emphasis>.
+              </para>
+            </listitem>
+          </varlistentry>
+
         </variablelist>
         <para></para>
       </section>
@@ -1209,6 +1267,19 @@ server.3=zoo3:2888:3888</programlisting>
               When this parameter is set to an X500 principal name, only an
               authenticated client with that principal will be able to bypass
               ACL checking and have full privileges to all znodes.</para>
+            </listitem>
+          </varlistentry>
+
+          <varlistentry>
+            <term>zookeeper.superUser</term>
+            <listitem>
+              <para>(Java system property: <emphasis
+              role="bold">zookeeper.superUser</emphasis>)</para>
+
+              <para>Similar to <emphasis role="bold">zookeeper.X509AuthenticationProvider.superUser</emphasis>
+              but is generic for SASL based logins. It stores the name of 
+              a user that can access the znode hierarchy as a "super" user.
+              </para>
             </listitem>
           </varlistentry>
 
@@ -1639,7 +1710,7 @@ server.3=zoo3:2888:3888</programlisting>
     <section id="sc_zkCommands">
       <title>ZooKeeper Commands</title>
 
-      <section>
+      <section id="sc_4lw">
         <title>The Four Letter Words</title>
         <para>ZooKeeper responds to a small set of commands. Each command is
         composed of four letters. You issue the commands to ZooKeeper via telnet
@@ -1650,7 +1721,16 @@ server.3=zoo3:2888:3888</programlisting>
         while "srvr" and "cons" give extended details on server and
         connections respectively.</para>
 
-        <variablelist>
+        <para><emphasis role="bold">New in 3.5.3:</emphasis>
+          Four Letter Words need to be explicitly white listed before using.
+          Please refer <emphasis role="bold">4lw.commands.whitelist</emphasis>
+           described in <ulink url="#sc_clusterOptions">
+            cluster configuration section</ulink> for details.
+          Moving forward, Four Letter Words will be deprecated, please use
+          <ulink url="#sc_adminserver">AdminServer</ulink> instead.
+        </para>
+
+      <variablelist>
           <varlistentry>
             <term>conf</term>
 
@@ -2092,7 +2172,7 @@ server.3=zoo3:2888:3888</programlisting>
         </varlistentry>
 
         <varlistentry>
-          <term>incorrect placement of transasction log</term>
+          <term>incorrect placement of transaction log</term>
 
           <listitem>
             <para>The most performance critical part of ZooKeeper is the
@@ -2125,6 +2205,16 @@ server.3=zoo3:2888:3888</programlisting>
             usage limit that would cause the system to swap.</para>
           </listitem>
         </varlistentry>
+
+        <varlistentry>
+          <term>Publicly accessible deployment</term>
+          <listitem>
+            <para>
+              A ZooKeeper ensemble is expected to operate in a trusted computing environment.
+              It is thus recommended to deploy ZooKeeper behind a firewall.
+            </para>
+          </listitem>
+        </varlistentry>
       </variablelist>
     </section>
 
@@ -2135,7 +2225,7 @@ server.3=zoo3:2888:3888</programlisting>
       Zookeeper practices:</para>
 
 
-      <para>For multi-tennant installations see the <ulink
+      <para>For multi-tenant installations see the <ulink
       url="zookeeperProgrammers.html#ch_zkSessions">section</ulink>
       detailing ZooKeeper "chroot" support, this can be very useful
       when deploying many applications/services interfacing to a

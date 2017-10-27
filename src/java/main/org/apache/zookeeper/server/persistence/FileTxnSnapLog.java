@@ -83,7 +83,7 @@ public class FileTxnSnapLog {
     /**
      * the constructor which takes the datadir and
      * snapdir.
-     * @param dataDir the trasaction directory
+     * @param dataDir the transaction directory
      * @param snapDir the snapshot directory
      */
     public FileTxnSnapLog(File dataDir, File snapDir) throws IOException {
@@ -196,7 +196,7 @@ public class FileTxnSnapLog {
             if (trustEmptyDB) {
                 /* TODO: (br33d) we should either put a ConcurrentHashMap on restore()
                  *       or use Map on save() */
-                save(dt, (ConcurrentHashMap<Long, Integer>)sessions);
+                save(dt, (ConcurrentHashMap<Long, Integer>)sessions, false);
 
                 /* return a zxid of 0, since we know the database is empty */
                 return 0L;
@@ -220,9 +220,8 @@ public class FileTxnSnapLog {
                     return dt.lastProcessedZxid;
                 }
                 if (hdr.getZxid() < highestZxid && highestZxid != 0) {
-                    LOG.error("{}(higestZxid) > {}(next log) for type {}",
-                            new Object[] { highestZxid, hdr.getZxid(),
-                                    hdr.getType() });
+                    LOG.error("{}(highestZxid) > {}(next log) for type {}",
+                            highestZxid, hdr.getZxid(), hdr.getType());
                 } else {
                     highestZxid = hdr.getZxid();
                 }
@@ -334,18 +333,20 @@ public class FileTxnSnapLog {
     /**
      * save the datatree and the sessions into a snapshot
      * @param dataTree the datatree to be serialized onto disk
-     * @param sessionsWithTimeouts the sesssion timeouts to be
+     * @param sessionsWithTimeouts the session timeouts to be
      * serialized onto disk
+     * @param syncSnap sync the snapshot immediately after write
      * @throws IOException
      */
     public void save(DataTree dataTree,
-            ConcurrentHashMap<Long, Integer> sessionsWithTimeouts)
+                     ConcurrentHashMap<Long, Integer> sessionsWithTimeouts,
+                     boolean syncSnap)
         throws IOException {
         long lastZxid = dataTree.lastProcessedZxid;
         File snapshotFile = new File(snapDir, Util.makeSnapshotName(lastZxid));
         LOG.info("Snapshotting: 0x{} to {}", Long.toHexString(lastZxid),
                 snapshotFile);
-        snapLog.serialize(dataTree, sessionsWithTimeouts, snapshotFile);
+        snapLog.serialize(dataTree, sessionsWithTimeouts, snapshotFile, syncSnap);
 
     }
 
@@ -428,6 +429,14 @@ public class FileTxnSnapLog {
      */
     public void commit() throws IOException {
         txnLog.commit();
+    }
+
+    /**
+     *
+     * @return elapsed sync time of transaction log commit in milliseconds
+     */
+    public long getTxnLogElapsedSyncTime() {
+        return txnLog.getTxnLogSyncElapsedTime();
     }
 
     /**

@@ -361,6 +361,7 @@ public class Learner {
         // In the DIFF case we don't need to do a snapshot because the transactions will sync on top of any existing snapshot
         // For SNAP and TRUNC the snapshot is needed to save that history
         boolean snapshotNeeded = true;
+        boolean syncSnapshot = false;
         readPacket(qp);
         LinkedList<Long> packetsCommitted = new LinkedList<Long>();
         LinkedList<PacketInFlight> packetsNotCommitted = new LinkedList<PacketInFlight>();
@@ -370,15 +371,26 @@ public class Learner {
                 snapshotNeeded = false;
             }
             else if (qp.getType() == Leader.SNAP) {
-                LOG.info("Getting a snapshot from leader");
+                LOG.info("Getting a snapshot from leader 0x" + Long.toHexString(qp.getZxid()));
                 // The leader is going to dump the database
                 // db is clear as part of deserializeSnapshot()
                 zk.getZKDatabase().deserializeSnapshot(leaderIs);
+                // ZOOKEEPER-2819: overwrite config node content extracted
+                // from leader snapshot with local config, to avoid potential
+                // inconsistency of config node content during rolling restart.
+                if (!QuorumPeerConfig.isReconfigEnabled()) {
+                    LOG.debug("Reset config node content from local config after deserialization of snapshot.");
+                    zk.getZKDatabase().initConfigInZKDatabase(self.getQuorumVerifier());
+                }
                 String signature = leaderIs.readString("signature");
                 if (!signature.equals("BenWasHere")) {
                     LOG.error("Missing signature. Got " + signature);
                     throw new IOException("Missing signature");                   
                 }
+                zk.getZKDatabase().setlastProcessedZxid(qp.getZxid());
+
+                // immediately persist the latest snapshot when there is txn log gap
+                syncSnapshot = true;
             } else if (qp.getType() == Leader.TRUNC) {
                 //we need to truncate the log to the lastzxid of the leader
                 LOG.warn("Truncating log to get in sync with the leader 0x"
@@ -390,6 +402,7 @@ public class Learner {
                             + Long.toHexString(qp.getZxid()));
                     System.exit(13);
                 }
+                zk.getZKDatabase().setlastProcessedZxid(qp.getZxid());
 
             }
             else {
@@ -399,7 +412,6 @@ public class Learner {
 
             }
             zk.getZKDatabase().initConfigInZKDatabase(self.getQuorumVerifier());
-            zk.getZKDatabase().setlastProcessedZxid(qp.getZxid());
             zk.createSessionTracker();            
             
             long lastQueued = 0;
@@ -505,7 +517,7 @@ public class Learner {
                        }
                     }
                     if (isPreZAB1_0) {
-                        zk.takeSnapshot();
+                        zk.takeSnapshot(syncSnapshot);
                         self.setCurrentEpoch(newEpoch);
                     }
                     self.setZooKeeperServer(zk);
@@ -525,7 +537,7 @@ public class Learner {
                    }
 
                    if (snapshotNeeded) {
-                       zk.takeSnapshot();
+                       zk.takeSnapshot(syncSnapshot);
                    }
                    
                     self.setCurrentEpoch(newEpoch);

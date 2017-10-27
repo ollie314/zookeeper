@@ -32,6 +32,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.ConcurrentHashMap;
@@ -148,7 +149,7 @@ public class Leader {
     }
 
     // Pending sync requests. Must access under 'this' lock.
-    private final HashMap<Long,List<LearnerSyncRequest>> pendingSyncs =
+    private final Map<Long,List<LearnerSyncRequest>> pendingSyncs =
         new HashMap<Long,List<LearnerSyncRequest>>();
 
     synchronized public int getNumPendingSyncs() {
@@ -724,7 +725,9 @@ public class Leader {
        // concurrent reconfigs are allowed, this can happen.
        if (outstandingProposals.containsKey(zxid - 1)) return false;
        
-       // getting a quorum from all necessary configurations
+       // in order to be committed, a proposal must be accepted by a quorum.
+       //
+       // getting a quorum from all necessary configurations.
         if (!p.hasAllQuorums()) {
            return false;                 
         }
@@ -736,8 +739,6 @@ public class Leader {
             LOG.warn("First is "
                     + (lastCommitted+1));
         }     
-        
-        // in order to be committed, a proposal must be accepted by a quorum              
         
         outstandingProposals.remove(zxid);
         

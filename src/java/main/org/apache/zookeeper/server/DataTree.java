@@ -118,7 +118,7 @@ public class DataTree {
     /** this will be the string thats stored as a child of /zookeeper */
     private static final String configChildZookeeper = configZookeeper
             .substring(procZookeeper.length() + 1);
-    
+
     /**
      * the path trie that keeps track fo the quota nodes in this datatree
      */
@@ -150,7 +150,7 @@ public class DataTree {
         if (retv == null) {
             return new HashSet<String>();
         }
-        HashSet<String> cloned = null;
+        Set<String> cloned = null;
         synchronized (retv) {
             cloned = (HashSet<String>) retv.clone();
         }
@@ -223,13 +223,6 @@ public class DataTree {
      */
     private final DataNode quotaDataNode = new DataNode(new byte[0], -1L, new StatPersisted());
 
-    /**
-     * create a /zookeeper/config node for maintaining the configuration (membership and quorum system) info for
-     * zookeeper
-     */
-    private DataNode configDataNode = new DataNode(new byte[0], -1L, new StatPersisted());
-
-    
     public DataTree() {
         /* Rather than fight it, let root have an alias */
         nodes.put("", root);
@@ -241,10 +234,14 @@ public class DataTree {
 
         procDataNode.addChild(quotaChildZookeeper);
         nodes.put(quotaZookeeper, quotaDataNode);
-        
+
         addConfigNode();
     }
 
+    /**
+     * create a /zookeeper/config node for maintaining the configuration (membership and quorum system) info for
+     * zookeeper
+     */
     public void addConfigNode() {
         DataNode zookeeperZnode = nodes.get(procZookeeper);
         if (zookeeperZnode != null) { // should always be the case
@@ -253,7 +250,7 @@ public class DataTree {
             assert false : "There's no /zookeeper znode - this should never happen.";
         }
 
-        nodes.put(configZookeeper, configDataNode);
+        nodes.put(configZookeeper, new DataNode(new byte[0], -1L, new StatPersisted()));
         try {
             // Reconfig node is access controlled by default (ZOOKEEPER-2014).
             setACL(configZookeeper, ZooDefs.Ids.READ_ACL_UNSAFE, -1);
@@ -406,8 +403,8 @@ public class DataTree {
      * @param zxid
      *            Transaction ID
      * @param time
-     * @throws NodeExistsException 
-     * @throws NoNodeException 
+     * @throws NodeExistsException
+     * @throws NoNodeException
      * @throws KeeperException
      */
     public void createNode(final String path, byte data[], List<ACL> acl,
@@ -415,7 +412,7 @@ public class DataTree {
     		throws NoNodeException, NodeExistsException {
     	createNode(path, data, acl, ephemeralOwner, parentCVersion, zxid, time, null);
     }
-    
+
     /**
      * Add a new node to the DataTree.
      * @param path
@@ -432,8 +429,8 @@ public class DataTree {
      * @param time
      * @param outputStat
      * 			  A Stat object to store Stat output results into.
-     * @throws NodeExistsException 
-     * @throws NoNodeException 
+     * @throws NodeExistsException
+     * @throws NoNodeException
      * @throws KeeperException
      */
     public void createNode(final String path, byte data[], List<ACL> acl,
@@ -552,7 +549,7 @@ public class DataTree {
             } else if (ephemeralType == EphemeralType.TTL) {
                 ttls.remove(path);
             } else if (eowner != 0) {
-                HashSet<String> nodes = ephemerals.get(eowner);
+                Set<String> nodes = ephemerals.get(eowner);
                 if (nodes != null) {
                     synchronized (nodes) {
                         nodes.remove(path);
@@ -1005,7 +1002,7 @@ public class DataTree {
         // so there is no need for synchronization. The list is not
         // changed here. Only create and delete change the list which
         // are again called from FinalRequestProcessor in sequence.
-        HashSet<String> list = ephemerals.remove(session);
+        Set<String> list = ephemerals.remove(session);
         if (list != null) {
             for (String path : list) {
                 try {
@@ -1289,7 +1286,7 @@ public class DataTree {
         for (Entry<Long, HashSet<String>> entry : ephemerals.entrySet()) {
             pwriter.print("0x" + Long.toHexString(entry.getKey()));
             pwriter.println(":");
-            HashSet<String> tmp = entry.getValue();
+            Set<String> tmp = entry.getValue();
             if (tmp != null) {
                 synchronized (tmp) {
                     for (String path : tmp) {
@@ -1306,7 +1303,7 @@ public class DataTree {
      * @return map of session ID to sets of ephemeral znodes
      */
     public Map<Long, Set<String>> getEphemerals() {
-        HashMap<Long, Set<String>> ephemeralsCopy = new HashMap<Long, Set<String>>();
+        Map<Long, Set<String>> ephemeralsCopy = new HashMap<Long, Set<String>>();
         for (Entry<Long, HashSet<String>> e : ephemerals.entrySet()) {
             synchronized (e.getValue()) {
                 ephemeralsCopy.put(e.getKey(), new HashSet<String>(e.getValue()));
@@ -1327,37 +1324,37 @@ public class DataTree {
             DataNode node = getNode(path);
             WatchedEvent e = null;
             if (node == null) {
-                watcher.process(new WatchedEvent(EventType.NodeDeleted, 
+                watcher.process(new WatchedEvent(EventType.NodeDeleted,
                             KeeperState.SyncConnected, path));
             } else if (node.stat.getMzxid() > relativeZxid) {
-                watcher.process(new WatchedEvent(EventType.NodeDataChanged, 
+                watcher.process(new WatchedEvent(EventType.NodeDataChanged,
                             KeeperState.SyncConnected, path));
             } else {
                 this.dataWatches.addWatch(path, watcher);
-            }    
-        }    
+            }
+        }
         for (String path : existWatches) {
             DataNode node = getNode(path);
             if (node != null) {
-                watcher.process(new WatchedEvent(EventType.NodeCreated, 
+                watcher.process(new WatchedEvent(EventType.NodeCreated,
                             KeeperState.SyncConnected, path));
             } else {
                 this.dataWatches.addWatch(path, watcher);
-            }    
-        }    
+            }
+        }
         for (String path : childWatches) {
             DataNode node = getNode(path);
             if (node == null) {
-                watcher.process(new WatchedEvent(EventType.NodeDeleted, 
+                watcher.process(new WatchedEvent(EventType.NodeDeleted,
                             KeeperState.SyncConnected, path));
             } else if (node.stat.getPzxid() > relativeZxid) {
-                watcher.process(new WatchedEvent(EventType.NodeChildrenChanged, 
+                watcher.process(new WatchedEvent(EventType.NodeChildrenChanged,
                             KeeperState.SyncConnected, path));
             } else {
                 this.childWatches.addWatch(path, watcher);
-            }    
-        }    
-    }    
+            }
+        }
+    }
 
      /**
       * This method sets the Cversion and Pzxid for the specified node to the
@@ -1435,5 +1432,10 @@ public class DataTree {
             break;
         }
         return removed;
+    }
+
+    // visible for testing
+    public ReferenceCountedACLCache getReferenceCountedAclCache() {
+        return aclCache;
     }
 }

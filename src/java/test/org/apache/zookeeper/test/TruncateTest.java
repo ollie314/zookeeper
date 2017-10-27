@@ -22,6 +22,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.HashMap;
+import java.util.Map;
 
 import org.apache.jute.Record;
 import org.apache.zookeeper.CreateMode;
@@ -66,7 +67,8 @@ public class TruncateTest extends ZKTestCase {
         ClientBase.recursiveDelete(dataDir2);
         ClientBase.recursiveDelete(dataDir3);
     }
-    
+
+
     @Test
     public void testTruncationStreamReset() throws Exception {
         File tmpdir = ClientBase.createTmpDir();
@@ -74,7 +76,7 @@ public class TruncateTest extends ZKTestCase {
         ZKDatabase zkdb = new ZKDatabase(snaplog);
         // make sure to snapshot, so that we have something there when
         // truncateLog reloads the db
-        snaplog.save(zkdb.getDataTree(), zkdb.getSessionWithTimeOuts());
+        snaplog.save(zkdb.getDataTree(), zkdb.getSessionWithTimeOuts(), false);
 
         for (int i = 1; i <= 100; i++) {
             append(zkdb, i);
@@ -105,7 +107,7 @@ public class TruncateTest extends ZKTestCase {
         iter.close();
         ClientBase.recursiveDelete(tmpdir);
     }
-    
+
     @Test
     public void testTruncationNullLog() throws Exception {
         File tmpdir = ClientBase.createTmpDir();
@@ -189,7 +191,7 @@ public class TruncateTest extends ZKTestCase {
         int port3 = PortAssignment.unique();
         
         // Start up two of the quorum and add 10 txns
-        HashMap<Long,QuorumServer> peers = new HashMap<Long,QuorumServer>();
+        Map<Long,QuorumServer> peers = new HashMap<Long,QuorumServer>();
         peers.put(Long.valueOf(1), new QuorumServer(1,
                        new InetSocketAddress("127.0.0.1", PortAssignment.unique()),
                        new InetSocketAddress("127.0.0.1", PortAssignment.unique()),
@@ -203,9 +205,9 @@ public class TruncateTest extends ZKTestCase {
                        new InetSocketAddress("127.0.0.1", PortAssignment.unique()),
                        new InetSocketAddress("127.0.0.1", port3)));
 
-        QuorumPeer s2 = new QuorumPeer(peers, dataDir2, dataDir2, port2, 0, 2, tickTime, initLimit, syncLimit);
+        QuorumPeer s2 = new QuorumPeer(peers, dataDir2, dataDir2, port2, 3, 2, tickTime, initLimit, syncLimit);
         s2.start();
-        QuorumPeer s3 = new QuorumPeer(peers, dataDir3, dataDir3, port3, 0, 3, tickTime, initLimit, syncLimit);
+        QuorumPeer s3 = new QuorumPeer(peers, dataDir3, dataDir3, port3, 3, 3, tickTime, initLimit, syncLimit);
         s3.start();
         zk = ClientBase.createZKClient("127.0.0.1:" + port2, 15000);
 
@@ -221,7 +223,7 @@ public class TruncateTest extends ZKTestCase {
         } catch(KeeperException.NoNodeException e) {
             // this is what we want
         }
-        QuorumPeer s1 = new QuorumPeer(peers, dataDir1, dataDir1, port1, 0, 1, tickTime, initLimit, syncLimit);
+        QuorumPeer s1 = new QuorumPeer(peers, dataDir1, dataDir1, port1, 3, 1, tickTime, initLimit, syncLimit);
         s1.start();
         ZooKeeper zk1 = ClientBase.createZKClient("127.0.0.1:" + port1, 15000);
         zk1.getData("/9", false, new Stat());

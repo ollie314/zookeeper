@@ -41,11 +41,13 @@ import org.apache.zookeeper.proto.ReplyHeader;
 import org.apache.zookeeper.proto.WatcherEvent;
 import org.apache.zookeeper.server.command.CommandExecutor;
 import org.apache.zookeeper.server.command.FourLetterCommands;
+import org.apache.zookeeper.server.command.NopCommand;
 import org.apache.zookeeper.server.command.SetTraceMaskCommand;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.buffer.ChannelBuffers;
 import org.jboss.netty.channel.Channel;
 import org.jboss.netty.channel.ChannelFuture;
+import org.jboss.netty.channel.ChannelFutureListener;
 import org.jboss.netty.channel.MessageEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,6 +63,7 @@ public class NettyServerCnxn extends ServerCnxn {
     int sessionTimeout;
     AtomicLong outstandingCount = new AtomicLong();
     Certificate[] clientChain;
+    volatile boolean closingChannel;
 
     /** The ZooKeeperServer for this connection. May be null if the server
      * is not currently serving requests (for example if the server is not
@@ -73,6 +76,7 @@ public class NettyServerCnxn extends ServerCnxn {
     
     NettyServerCnxn(Channel channel, ZooKeeperServer zks, NettyServerCnxnFactory factory) {
         this.channel = channel;
+        this.closingChannel = false;
         this.zkServer = zks;
         this.factory = factory;
         if (this.factory.login != null) {
@@ -82,10 +86,18 @@ public class NettyServerCnxn extends ServerCnxn {
     
     @Override
     public void close() {
+        closingChannel = true;
+        
         if (LOG.isDebugEnabled()) {
             LOG.debug("close called for sessionid:0x"
                     + Long.toHexString(sessionId));
         }
+
+        // ZOOKEEPER-2743:
+        // Always unregister connection upon close to prevent
+        // connection bean leak under certain race conditions.
+        factory.unregisterConnection(this);
+
         synchronized(factory.cnxns){
             // if this is not in cnxns then it's already closed
             if (!factory.cnxns.remove(this)) {
@@ -108,9 +120,11 @@ public class NettyServerCnxn extends ServerCnxn {
         }
 
         if (channel.isOpen()) {
-            channel.close();
+            // Since we don't check on the futures created by write calls to the channel complete we need to make sure
+            // that all writes have been completed before closing the channel or we risk data loss
+            // See: http://lists.jboss.org/pipermail/netty-users/2009-August/001122.html
+            channel.write(ChannelBuffers.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
         }
-        factory.unregisterConnection(this);
     }
 
     @Override
@@ -165,7 +179,7 @@ public class NettyServerCnxn extends ServerCnxn {
     @Override
     public void sendResponse(ReplyHeader h, Record r, String tag)
             throws IOException {
-        if (!channel.isOpen()) {
+        if (closingChannel || !channel.isOpen()) {
             return;
         }
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -267,17 +281,30 @@ public class NettyServerCnxn extends ServerCnxn {
     {
         // We take advantage of the limited size of the length to look
         // for cmds. They are all 4-bytes which fits inside of an int
-        String cmd = FourLetterCommands.getCmdMapView().get(len);
-        if (cmd == null) {
+        if (!FourLetterCommands.isKnown(len)) {
             return false;
         }
+
+        String cmd = FourLetterCommands.getCommandString(len);
+
         channel.setInterestOps(0).awaitUninterruptibly();
-        LOG.info("Processing " + cmd + " command from "
-                + channel.getRemoteAddress());
         packetReceived();
 
         final PrintWriter pwriter = new PrintWriter(
                 new BufferedWriter(new SendBufferWriter()));
+
+        // ZOOKEEPER-2693: don't execute 4lw if it's not enabled.
+        if (!FourLetterCommands.isEnabled(cmd)) {
+            LOG.debug("Command {} is not executed because it is not in the whitelist.", cmd);
+            NopCommand nopCmd = new NopCommand(pwriter, this, cmd +
+                    " is not executed because it is not in the whitelist.");
+            nopCmd.start();
+            return true;
+        }
+
+        LOG.info("Processing " + cmd + " command from "
+                + channel.getRemoteAddress());
+
        if (len == FourLetterCommands.setTraceMaskCmd) {
             ByteBuffer mask = ByteBuffer.allocate(8);
             message.readBytes(mask);

@@ -24,6 +24,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 
 /**
  *
@@ -33,7 +35,7 @@ public class JRecord extends JCompType {
     private String mFQName;
     private String mName;
     private String mModule;
-    private ArrayList<JField> mFields;
+    private List<JField> mFields;
 
     /**
      * Creates a new instance of JRecord
@@ -83,7 +85,7 @@ public class JRecord extends JCompType {
         return namespace.toString();
     }
 
-    public ArrayList<JField> getFields() {
+    public List<JField> getFields() {
         return mFields;
     }
 
@@ -139,7 +141,7 @@ public class JRecord extends JCompType {
         return "    a_.WriteRecord("+fname+",\""+tag+"\");\n";
     }
 
-    static HashMap<String, String> vectorStructs = new HashMap<String, String>();
+    static Map<String, String> vectorStructs = new HashMap<String, String>();
     public void genCCode(FileWriter h, FileWriter c) throws IOException {
         for (JField f : mFields) {
             if (f.getType() instanceof JVector) {
@@ -425,6 +427,8 @@ public class JRecord extends JCompType {
             jj.write("\n");
             jj.write("package " + getJavaPackage() + ";\n\n");
             jj.write("import org.apache.jute.*;\n");
+            jj.write("import org.apache.yetus.audience.InterfaceAudience;\n");
+            jj.write("@InterfaceAudience.Public\n");
             jj.write("public class " + getName() + " implements Record {\n");
             for (Iterator<JField> i = mFields.iterator(); i.hasNext(); ) {
                 JField jf = i.next();

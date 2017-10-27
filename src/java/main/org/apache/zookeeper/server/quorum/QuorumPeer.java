@@ -29,7 +29,6 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -831,28 +830,16 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
         responder.interrupt();
     }
     synchronized public void startLeaderElection() {
-       try {
-           if (getPeerState() == ServerState.LOOKING) {
-               currentVote = new Vote(myid, getLastLoggedZxid(), getCurrentEpoch());
-           }
-       } catch(IOException e) {
-           RuntimeException re = new RuntimeException(e.getMessage());
-           re.setStackTrace(e.getStackTrace());
-           throw re;
-       }
-
-       // if (!getView().containsKey(myid)) {
-      //      throw new RuntimeException("My id " + myid + " not in the peer list");
-        //}
-        if (electionType == 0) {
-            try {
-                udpSocket = new DatagramSocket(myQuorumAddr.getPort());
-                responder = new ResponderThread();
-                responder.start();
-            } catch (SocketException e) {
-                throw new RuntimeException(e);
+        try {
+            if (getPeerState() == ServerState.LOOKING) {
+                currentVote = new Vote(myid, getLastLoggedZxid(), getCurrentEpoch());
             }
+        } catch(IOException e) {
+            RuntimeException re = new RuntimeException(e.getMessage());
+            re.setStackTrace(e.getStackTrace());
+            throw re;
         }
+
         this.electionAlg = createElectionAlgorithm(electionType);
     }
 
@@ -952,29 +939,26 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
 
         //TODO: use a factory rather than a switch
         switch (electionAlgorithm) {
-        case 0:
-            le = new LeaderElection(this);
-            break;
-        case 1:
-            le = new AuthFastLeaderElection(this);
-            break;
-        case 2:
-            le = new AuthFastLeaderElection(this, true);
-            break;
-        case 3:
-            qcm = new QuorumCnxManager(this);
-            QuorumCnxManager.Listener listener = qcm.listener;
-            if(listener != null){
-                listener.start();
-                FastLeaderElection fle = new FastLeaderElection(this, qcm);
-                fle.start();
-                le = fle;
-            } else {
-                LOG.error("Null listener when initializing cnx manager");
-            }
-            break;
-        default:
-            assert false;
+            case 1:
+                le = new AuthFastLeaderElection(this);
+                break;
+            case 2:
+                le = new AuthFastLeaderElection(this, true);
+                break;
+            case 3:
+                qcm = new QuorumCnxManager(this);
+                QuorumCnxManager.Listener listener = qcm.listener;
+                if(listener != null){
+                    listener.start();
+                    FastLeaderElection fle = new FastLeaderElection(this, qcm);
+                    fle.start();
+                    le = fle;
+                } else {
+                    LOG.error("Null listener when initializing cnx manager");
+                }
+                break;
+            default:
+                assert false;
         }
         return le;
     }
@@ -982,9 +966,6 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
     @SuppressWarnings("deprecation")
     protected Election makeLEStrategy(){
         LOG.debug("Initializing leader election protocol...");
-        if (getElectionType() == 0) {
-            electionAlg = new LeaderElection(this);
-        }
         return electionAlg;
     }
 
@@ -1451,6 +1432,10 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
     }
 
     public String getNextDynamicConfigFilename() {
+        if (configFilename == null) {
+            LOG.warn("configFilename is null! This should only happen in tests.");
+            return null;
+        }
         return configFilename + QuorumPeerConfig.nextDynamicConfigFileSuffix;
     }
     
@@ -1471,8 +1456,10 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
             connectNewPeers();
             if (writeToDisk) {
                 try {
-                    QuorumPeerConfig.writeDynamicConfig(
-                            getNextDynamicConfigFilename(), qv, true);
+                    String fileName = getNextDynamicConfigFilename();
+                    if (fileName != null) {
+                        QuorumPeerConfig.writeDynamicConfig(fileName, qv, true);
+                    }
                 } catch (IOException e) {
                     LOG.error("Error writing next dynamic config file to disk: ", e.getMessage());
                 }
@@ -1761,10 +1748,15 @@ public class QuorumPeer extends ZooKeeperThread implements QuorumStats.Provider 
     }
    
     public boolean processReconfig(QuorumVerifier qv, Long suggestedLeaderId, Long zxid, boolean restartLE) {
+       if (!QuorumPeerConfig.isReconfigEnabled()) {
+           LOG.debug("Reconfig feature is disabled, skip reconfig processing.");
+           return false;
+       }
+
        InetSocketAddress oldClientAddr = getClientAddress();
 
        // update last committed quorum verifier, write the new config to disk
-       // and restart leader election if config changed
+       // and restart leader election if config changed.
        QuorumVerifier prevQV = setQuorumVerifier(qv, true);
 
        // There is no log record for the initial config, thus after syncing
